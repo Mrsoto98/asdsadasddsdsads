@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pasaporte de Viajes</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        passport: {
+                            light: '#fef3c7',
+                            DEFAULT: '#fef3c7',
+                            dark: '#d97706',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css">
+    <style>
+        #map { height: 500px; }
+        .passport-page {
+            transform-style: preserve-3d;
+            transition: all 0.3s ease;
+        }
+        .passport-page:hover {
+            transform: rotateY(5deg) scale(1.01);
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.2);
+        }
+        .country-visited {
+            fill: #10b981 !important;
+            stroke: #047857 !important;
+        }
+        .modal {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .modal-hidden {
+            opacity: 0;
+            transform: translateY(10px);
+            pointer-events: none;
+        }
+        .achievement-locked {
+            filter: grayscale(100%);
+            opacity: 0.7;
+        }
+        .floating-button {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 40;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+    <!-- Auth Modals -->
+    <div id="loginModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 modal-hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6 mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold">Iniciar sesión</h3>
+                <button id="closeLoginModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Correo electrónico</label>
+                    <input type="email" id="loginEmail" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Contraseña</label>
+                    <input type="password" id="loginPassword" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                </div>
+                <div class="flex justify-between items-center">
+                    <label class="flex items-center space-x-2">
+                        <input type="checkbox" id="rememberMe" class="rounded text-emerald-600">
+                        <span class="text-sm">Recordarme</span>
+                    </label>
+                    <button type="button" id="forgotPassword" class="text-sm text-emerald-600 hover:underline">¿Olvidaste tu contraseña?</button>
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700">
+                    Iniciar sesión
+                </button>
+                <div class="text-center text-sm">
+                    ¿No tienes una cuenta? <button type="button" id="showRegister" class="text-emerald-600 hover:underline">Regístrate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="registerModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 modal-hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6 mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold">Crear cuenta</h3>
+                <button id="closeRegisterModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="registerForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Nombre completo</label>
+                    <input type="text" id="registerName" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Nombre de usuario</label>
+                    <input type="text" id="registerUsername" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                    <p class="text-xs text-gray-500 mt-1">Este será tu nombre público en la app</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Correo electrónico</label>
+                    <input type="email" id="registerEmail" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Contraseña</label>
+                    <input type="password" id="registerPassword" required minlength="6" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                    <p class="text-xs text-gray-500 mt-1">Mínimo 6 caracteres</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Confirmar contraseña</label>
+                    <input type="password" id="registerConfirmPassword" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700">
+                    Crear cuenta
+                </button>
+                <div class="text-center text-sm">
+                    ¿Ya tienes una cuenta? <button type="button" id="showLogin" class="text-emerald-600 hover:underline">Inicia sesión</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="forgotPasswordModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 modal-hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md p-6 mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold">Recuperar contraseña</h3>
+                <button id="closeForgotPasswordModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="forgotPasswordForm" class="space-y-4">
+                <p class="text-sm">Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.</p>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Correo electrónico</label>
+                    <input type="email" id="forgotEmail" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700">
+                    Enviar enlace
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App (hidden until login) -->
+    <div id="appContainer" class="hidden">
+        <div class="container mx-auto px-4 py-6">
+            <!-- Header -->
+            <header class="flex justify-between items-center mb-8">
+                <div class="flex items-center">
+                    <i class="fas fa-passport text-4xl text-emerald-600 mr-3"></i>
+                    <h1 class="text-3xl font-bold">Pasaporte de Viajes</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="darkModeToggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                        <i class="fas fa-moon dark:hidden"></i>
+                        <i class="fas fa-sun hidden dark:block"></i>
+                    </button>
+                    <button id="languageToggle" class="p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+                        <i class="fas fa-language"></i>
+                    </button>
+                    <div class="relative">
+                        <button id="userMenuButton" class="flex items-center space-x-2">
+                            <img id="userAvatar" src="https://ui-avatars.com/api/?name=Usuario&background=10b981&color=fff" 
+                                 alt="User" class="w-10 h-10 rounded-full">
+                            <span id="usernameDisplay" class="font-medium">Usuario</span>
+                        </button>
+                        <div id="userMenu" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50 border border-gray-200 dark:border-gray-700">
+                            <a href="#" id="profileLink" class="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700">Perfil</a>
+                            <a href="#" id="settingsLink" class="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700">Configuración</a>
+                            <a href="#" id="logoutLink" class="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700">Cerrar sesión</a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Column -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Map Section -->
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-semibold" id="mapTitle">Mapa de tus viajes</h2>
+                            <button id="locateMe" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 flex items-center">
+                                <i class="fas fa-location-arrow mr-2"></i>
+                                <span id="locateText">Localizarme</span>
+                            </button>
+                        </div>
+                        <div id="map" class="rounded-lg overflow-hidden"></div>
+                        <div class="mt-4 flex justify-between items-center">
+                            <div class="text-sm">
+                                <span id="countriesCount">0</span> países visitados de 195
+                            </div>
+                            <div class="w-3/4 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                <div id="progressBar" class="bg-emerald-600 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Friends Section -->
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-semibold" id="friendsTitle">Compara con amigos</h2>
+                            <button id="addFriendButton" class="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700">
+                                <i class="fas fa-user-plus"></i>
+                            </button>
+                        </div>
+                        <div id="friendsList" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <!-- Friends will be loaded here -->
+                        </div>
+                        <button id="viewAllFriends" class="mt-4 w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 py-2 rounded-lg">
+                            <i class="fas fa-users mr-2"></i>
+                            <span id="viewAllFriendsText">Ver todos los amigos</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div class="space-y-6">
+                    <!-- Passport Section -->
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-semibold" id="passportTitle">Tu pasaporte</h2>
+                            <button id="newPassportPage" class="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div id="passportEntries" class="space-y-4 h-96 overflow-y-auto">
+                            <!-- Passport entries will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Achievements Section -->
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border border-gray-200 dark:border-gray-700">
+                        <h2 class="text-xl font-semibold mb-4" id="achievementsTitle">Logros</h2>
+                        <div id="achievementsGrid" class="grid grid-cols-3 gap-3">
+                            <!-- Achievements will be loaded here -->
+                        </div>
+                        <button id="viewAllAchievements" class="mt-4 w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 py-2 rounded-lg">
+                            <i class="fas fa-trophy mr-2"></i>
+                            <span id="viewAllText">Ver todos</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Action Button -->
+        <button id="quickAddButton" class="floating-button bg-emerald-600 text-white w-14 h-14 rounded-full flex items-center justify-center hover:bg-emerald-700">
+            <i class="fas fa-plus text-xl"></i>
+        </button>
+
+        <!-- Profile Modal -->
+        <div id="profileModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 modal-hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold">Perfil de Usuario</h3>
+                    <button id="closeProfileModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <div class="flex justify-center">
+                        <div class="relative">
+                            <img id="profileAvatar" src="https://ui-avatars.com/api/?name=Usuario&background=10b981&color=fff" 
+                                 alt="User" class="w-24 h-24 rounded-full">
+                            <button id="changeAvatar" class="absolute bottom-0 right-0 bg-emerald-600 text-white p-2 rounded-full hover:bg-emerald-700">
+                                <i class="fas fa-camera"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Nombre completo</label>
+                        <input type="text" id="profileName" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Nombre de usuario</label>
+                        <input type="text" id="profileUsername" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Correo electrónico</label>
+                        <input type="email" id="profileEmail" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">ID de usuario</label>
+                        <input type="text" id="profileUserId" readonly class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-gray-100 dark:bg-gray-700 cursor-not-allowed">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Biografía</label>
+                        <textarea id="profileBio" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700 h-24"></textarea>
+                    </div>
+                    <button id="saveProfile" class="w-full bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700">
+                        Guardar cambios
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settingsModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 modal-hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold">Configuración</h3>
+                    <button id="closeSettingsModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <h4 class="font-medium mb-2">Idioma</h4>
+                        <select id="languageSelect" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                            <option value="es">Español</option>
+                            <option value="en">English</option>
+                            <option value="fr">Français</option>
+                        </select>
+                    </div>
+                    <div>
+                        <h4 class="font-medium mb-2">Notificaciones</h4>
+                        <div class="space-y-2">
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" id="notifNewCountries" checked class="rounded text-emerald-600">
+                                <span>Nuevos países detectados</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" id="notifFriendUpdates" checked class="rounded text-emerald-600">
+                                <span>Actualizaciones de amigos</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" id="notifNewsletter" class="rounded text-emerald-600">
+                                <span>Boletín de viajes</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="font-medium mb-2">Cambiar contraseña</h4>
+                        <div class="space-y-2">
+                            <input type="password" id="currentPassword" placeholder="Contraseña actual" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                            <input type="password" id="newPassword" placeholder="Nueva contraseña" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                            <input type="password" id="confirmNewPassword" placeholder="Confirmar nueva contraseña" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                        </div>
+                    </div>
+                    <button id="saveSettings" class="w-full bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700">
+                        Guardar configuración
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Country Modal -->
+        <div id="addCountryModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 modal-hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold" id="addCountryTitle">Añadir país visitado</h3>
+                    <button id="closeAddCountryModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">País</label>
+                        <select id="countrySelect" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                            <option value="">Selecciona un país</option>
+                            <!-- Countries will be loaded here -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Fecha de visita</label>
+                        <input type="date" id="visitDate" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Notas</label>
+                        <textarea id="countryNotes" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700 h-24" placeholder="Escribe tus recuerdos de este país..."></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-2">
+                        <button id="cancelAddCountry" class="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                            Cancelar
+                        </button>
+                        <button id="confirmAddCountry" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">
+                            Añadir país
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Friend Modal -->
+        <div id="addFriendModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 modal-hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md p-6 mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold" id="addFriendTitle">Agregar amigo</h3>
+                    <button id="closeAddFriendModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">ID de usuario</label>
+                        <input type="text" id="friendIdInput" placeholder="Ingresa el ID de usuario" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">O busca por nombre</label>
+                        <input type="text" id="friendSearchInput" placeholder="Buscar usuarios..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-700">
+                        <div id="friendSearchResults" class="mt-2 hidden max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded">
+                            <!-- Search results will appear here -->
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2">
+                        <button id="cancelAddFriend" class="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+                            Cancelar
+                        </button>
+                        <button id="confirmAddFriend" class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700">
+                            Enviar solicitud
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View All Achievements Modal -->
+        <div id="achievementsModal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 modal-hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl p-6 mx-4 max-h-[80vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold" id="achievementsModalTitle">Todos los logros</h3>
+                    <button id="closeAchievementsModal" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="allAchievements" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- All achievements will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification -->
+        <div id="locationNotification" class="hidden fixed bottom-4 right-4 bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4 w-80 z-50 border-l-4 border-emerald-500">
+            <div class="flex justify-between items-start">
+                <div class="flex items-start">
+                    <i class="fas fa-map-marker-alt text-emerald-500 mt-1 mr-3"></i>
+                    <div>
+                        <h3 class="font-medium" id="notificationTitle">Nuevo país detectado</h3>
+                        <p class="text-sm" id="notificationText">Parece que estás en Portugal. ¿Quieres añadirlo a tu pasaporte?</p>
+                    </div>
+                </div>
+                <button id="closeNotification" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="flex justify-end mt-3 space-x-2">
+                <button id="laterNotification" class="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded text-sm">Más tarde</button>
+                <button id="addNotification" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm">Añadir</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Database simulation (in a real app, this would be a backend API)
+        const database = {
+            users: [],
+            countries: [
+                { code: 'es', name: 'España', lat: 40.4637, lng: -3.7492 },
+                { code: 'fr', name: 'Francia', lat: 46.2276, lng: 2.2137 },
+                { code: 'it', name: 'Italia', lat: 41.8719, lng: 12.5674 },
+                { code: 'pt', name: 'Portugal', lat: 39.3999, lng: -8.2245 },
+                { code: 'de', name: 'Alemania', lat: 51.1657, lng: 10.4515 },
+                { code: 'uk', name: 'Reino Unido', lat: 55.3781, lng: -3.4360 },
+                { code: 'us', name: 'Estados Unidos', lat: 37.0902, lng: -95.7129 },
+                { code: 'mx', name: 'México', lat: 23.6345, lng: -102.5528 },
+                { code: 'ar', name: 'Argentina', lat: -38.4161, lng: -63.6167 },
+                { code: 'br', name: 'Brasil', lat: -14.2350, lng: -51.9253 },
+                { code: 'jp', name: 'Japón', lat: 36.2048, lng: 138.2529 },
+                { code: 'cn', name: 'China', lat: 35.8617, lng: 104.1954 },
+                { code: 'in', name: 'India', lat: 20.5937, lng: 78.9629 },
+                { code: 'au', name: 'Australia', lat: -25.2744, lng: 133.7751 },
+                { code: 'za', name: 'Sudáfrica', lat: -30.5595, lng: 22.9375 }
+            ],
+            achievements: [
+                { id: 1, name: 'Primeros 5', description: 'Visita tus primeros 5 países', icon: 'fa-flag', color: 'blue', target: 5 },
+                { id: 2, name: 'Europa', description: 'Visita 10 países europeos', icon: 'fa-globe-europe', color: 'emerald', target: 10 },
+                { id: 3, name: 'Viajero', description: 'Visita 15 países en total', icon: 'fa-passport', color: 'purple', target: 15 },
+                { id: 4, name: 'América', description: 'Visita 5 países americanos', icon: 'fa-globe-americas', color: 'red', target: 5 },
+                { id: 5, name: 'Asia', description: 'Visita 5 países asiáticos', icon: 'fa-globe-asia', color: 'yellow', target: 5 },
+                { id: 6, name: 'África', description: 'Visita 3 países africanos', icon: 'fa-globe-africa', color: 'orange', target: 3 },
+                { id: 7, name: 'Oceanía', description: 'Visita 2 países de Oceanía', icon: 'fa-water', color: 'indigo', target: 2 },
+                { id: 8, name: 'Explorador', description: 'Visita 25 países en total', icon: 'fa-compass', color: 'pink', target: 25 },
+                { id: 9, name: 'Aventurero', description: 'Visita 50 países en total', icon: 'fa-mountain', color: 'teal', target: 50 },
+                { id: 10, name: 'Ciudadano del mundo', description: 'Visita 100 países en total', icon: 'fa-globe', color: 'cyan', target: 100 }
+            ],
+            friendships: []
+        };
+
+        // Current user data
+        let currentUser = null;
+
+        // Initialize app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is logged in (from localStorage)
+            const savedUser = localStorage.getItem('travelPassportUser');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                initApp();
+            } else {
+                // Show login modal if no user is logged in
+                showModal('loginModal');
+            }
+
+            // Initialize modals and event listeners
+            initModals();
+            initEventListeners();
+        });
+
+        // Initialize the main app
+        function initApp() {
+            // Show app container
+            document.getElementById('appContainer').classList.remove('hidden');
+            
+            // Update UI with user data
+            updateUserUI();
+            
+            // Initialize map
+            initMap();
+            
+            // Load passport entries
+            loadPassportEntries();
+            
+            // Load achievements
+            loadAchievements();
+            
+            // Load friends
+            loadFriends();
+            
+            // Load country select options
+            loadCountrySelectOptions();
+        }
+
+        // Initialize modals
+        function initModals() {
+            // Login modal
+            document.getElementById('showRegister').addEventListener('click', function() {
+                hideModal('loginModal');
+                showModal('registerModal');
+            });
+
+            document.getElementById('forgotPassword').addEventListener('click', function() {
+                hideModal('loginModal');
+                showModal('forgotPasswordModal');
+            });
+
+            // Register modal
+            document.getElementById('showLogin').addEventListener('click', function() {
+                hideModal('registerModal');
+                showModal('loginModal');
+            });
+
+            // Forgot password modal
+            document.getElementById('closeForgotPasswordModal').addEventListener('click', function() {
+                hideModal('forgotPasswordModal');
+            });
+
+            // Login form submission
+            document.getElementById('loginForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const email = document.getElementById('loginEmail').value;
+                const password = document.getElementById('loginPassword').value;
+                loginUser(email, password);
+            });
+
+            // Register form submission
+            document.getElementById('registerForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const name = document.getElementById('registerName').value;
+                const username = document.getElementById('registerUsername').value;
+                const email = document.getElementById('registerEmail').value;
+                const password = document.getElementById('registerPassword').value;
+                const confirmPassword = document.getElementById('registerConfirmPassword').value;
+                
+                if (password !== confirmPassword) {
+                    alert('Las contraseñas no coinciden');
+                    return;
+                }
+                
+                registerUser(name, username, email, password);
+            });
+
+            // Forgot password form submission
+            document.getElementById('forgotPasswordForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const email = document.getElementById('forgotEmail').value;
+                // In a real app, send password reset email
+                alert(`Se ha enviado un enlace de recuperación a ${email}`);
+                hideModal('forgotPasswordModal');
+                showModal('loginModal');
+            });
+        }
+
+        // Initialize event listeners
+        function initEventListeners() {
+            // Dark mode toggle
+            document.getElementById('darkModeToggle').addEventListener('click', function() {
+                document.documentElement.classList.toggle('dark');
+                localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
+            });
+
+            // Check for saved dark mode preference
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.documentElement.classList.add('dark');
+            }
+
+            // Language toggle (English/Spanish)
+            let currentLanguage = 'es';
+            document.getElementById('languageToggle').addEventListener('click', function() {
+                currentLanguage = currentLanguage === 'es' ? 'en' : 'es';
+                updateLanguage(currentLanguage);
+            });
+
+            // User menu toggle
+            document.getElementById('userMenuButton').addEventListener('click', function() {
+                document.getElementById('userMenu').classList.toggle('hidden');
+            });
+
+            // Close user menu when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!event.target.closest('#userMenuButton') && !event.target.closest('#userMenu')) {
+                    document.getElementById('userMenu').classList.add('hidden');
+                }
+            });
+
+            // Profile link
+            document.getElementById('profileLink').addEventListener('click', function(e) {
+                e.preventDefault();
+                showProfileModal();
+            });
+
+            // Settings link
+            document.getElementById('settingsLink').addEventListener('click', function(e) {
+                e.preventDefault();
+                showSettingsModal();
+            });
+
+            // Logout link
+            document.getElementById('logoutLink').addEventListener('click', function(e) {
+                e.preventDefault();
+                logoutUser();
+            });
+
+            // Add new passport page
+            document.getElementById('newPassportPage').addEventListener('click', function() {
+                showAddCountryModal();
+            });
+
+            // Quick add button
+            document.getElementById('quickAddButton').addEventListener('click', function() {
+                showAddCountryModal();
+            });
+
+            // Save profile
+            document.getElementById('saveProfile').addEventListener('click', function() {
+                saveProfile();
+            });
+
+            // Save settings
+            document.getElementById('saveSettings').addEventListener('click', function() {
+                saveSettings();
+            });
+
+            // Add friend button
+            document.getElementById('addFriendButton').addEventListener('click', function() {
+                showAddFriendModal();
+            });
+
+            // View all achievements
+            document.getElementById('viewAllAchievements').addEventListener('click', function() {
+                showAllAchievements();
+            });
+
+            // View all friends
+            document.getElementById('viewAllFriends').addEventListener('click', function() {
+                // In a real app, this would show a full friends list
+                alert('Mostrando todos los amigos');
+            });
+        }
+
+        // User authentication functions
+        function loginUser(email, password) {
+            // In a real app, this would be an API call
+            const user = database.users.find(u => u.email === email && u.password === password);
+            
+            if (user) {
+                currentUser = user;
+                localStorage.setItem('travelPassportUser', JSON.stringify(user));
+                
+                if (document.getElementById('rememberMe').checked) {
+                    localStorage.setItem('travelPassportRemember', 'true');
+                }
+                
+                hideModal('loginModal');
+                initApp();
+            } else {
+                alert('Correo electrónico o contraseña incorrectos');
+            }
+        }
+
+        function registerUser(name, username, email, password) {
+            // Check if email or username already exists
+            const emailExists = database.users.some(u => u.email === email);
+            const usernameExists = database.users.some(u => u.username === username);
+            
+            if (emailExists) {
+                alert('Este correo electrónico ya está registrado');
+                return;
+            }
+            
+            if (usernameExists) {
+                alert('Este nombre de usuario ya está en uso');
+                return;
+            }
+            
+            // Create new user
+            const newUser = {
+                id: generateUserId(),
+                name: name,
+                username: username,
+                email: email,
+                password: password,
+                bio: '¡Amante de los viajes y las aventuras!',
+                avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=10b981&color=fff`,
+                visitedCountries: [
+                    { code: 'es', name: 'España', date: '2023-06-15', notes: '¡Mi primer viaje internacional! Las playas de Barcelona son increíbles.' },
+                    { code: 'fr', name: 'Francia', date: '2023-07-22', notes: 'La Torre Eiffel es aún más impresionante en persona. ¡Y los croissants!' },
+                    { code: 'it', name: 'Italia', date: '2023-09-05', notes: 'El Coliseo es impresionante, y la pizza en Nápoles es la mejor del mundo.' }
+                ],
+                settings: {
+                    language: 'es',
+                    notifications: {
+                        newCountries: true,
+                        friendUpdates: true,
+                        newsletter: false
+                    }
+                },
+                achievements: [1, 2, 3], // IDs of unlocked achievements
+                friends: [] // Array of friend user IDs
+            };
+            
+            database.users.push(newUser);
+            currentUser = newUser;
+            localStorage.setItem('travelPassportUser', JSON.stringify(newUser));
+            
+            hideModal('registerModal');
+            initApp();
+        }
+
+        function logoutUser() {
+            currentUser = null;
+            localStorage.removeItem('travelPassportUser');
+            document.getElementById('appContainer').classList.add('hidden');
+            showModal('loginModal');
+        }
+
+        function generateUserId() {
+            return 'user_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // Update UI with user data
+        function updateUserUI() {
+            if (!currentUser) return;
+            
+            document.getElementById('usernameDisplay').textContent = currentUser.username;
+            document.getElementById('userAvatar').src = currentUser.avatar;
+            
+            // Update profile modal fields
+            document.getElementById('profileName').value = currentUser.name;
+            document.getElementById('profileUsername').value = currentUser.username;
+            document.getElementById('profileEmail').value = currentUser.email;
+            document.getElementById('profileUserId').value = currentUser.id;
+            document.getElementById('profileBio').value = currentUser.bio;
+            document.getElementById('profileAvatar').src = currentUser.avatar;
+            
+            // Update settings
+            document.getElementById('languageSelect').value = currentUser.settings.language;
+            document.getElementById('notifNewCountries').checked = currentUser.settings.notifications.newCountries;
+            document.getElementById('notifFriendUpdates').checked = currentUser.settings.notifications.friendUpdates;
+            document.getElementById('notifNewsletter').checked = currentUser.settings.notifications.newsletter;
+        }
+
+        // Initialize map
+        function initMap() {
+            const map = L.map('map').setView([20, 0], 2);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            // Add markers for visited countries
+            if (currentUser && currentUser.visitedCountries) {
+                currentUser.visitedCountries.forEach(visit => {
+                    const country = database.countries.find(c => c.code === visit.code);
+                    if (country) {
+                        const marker = L.marker([country.lat, country.lng]).addTo(map);
+                        marker.bindPopup(`<b>${country.name}</b><br>Visitado el ${visit.date}`);
+                    }
+                });
+            }
+
+            // Update progress bar and count
+            updateProgress();
+        }
+
+        // Update progress bar
+        function updateProgress() {
+            if (!currentUser) return;
+            
+            const visitedCount = currentUser.visitedCountries ? currentUser.visitedCountries.length : 0;
+            const percentage = (visitedCount / 195 * 100).toFixed(1);
+            
+            document.getElementById('countriesCount').textContent = visitedCount;
+            document.getElementById('progressBar').style.width = `${percentage}%`;
+        }
+
+        // Load passport entries
+        function loadPassportEntries() {
+            const passportEntries = document.getElementById('passportEntries');
+            passportEntries.innerHTML = '';
+            
+            if (!currentUser || !currentUser.visitedCountries) return;
+            
+            currentUser.visitedCountries.forEach(visit => {
+                const country = database.countries.find(c => c.code === visit.code);
+                if (!country) return;
+                
+                const entry = document.createElement('div');
+                entry.className = 'passport-page bg-passport-light dark:bg-yellow-900 border-2 border-amber-300 dark:border-amber-700 rounded-lg p-4';
+                entry.innerHTML = `
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <img src="https://flagcdn.com/w80/${visit.code}.png" alt="${country.name} Flag" class="w-16 h-12 object-cover border">
+                            <p class="font-bold mt-1">${country.name}</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Visitado: ${formatDate(visit.date)}</p>
+                        </div>
+                        <button class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 delete-entry" data-code="${visit.code}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <textarea class="w-full bg-passport-light dark:bg-yellow-900 border border-amber-200 dark:border-amber-600 rounded p-2 text-sm h-24">${visit.notes || ''}</textarea>
+                `;
+                
+                passportEntries.appendChild(entry);
+            });
+
+            // Add event listeners to delete buttons
+            document.querySelectorAll('.delete-entry').forEach(button => {
+                button.addEventListener('click', function() {
+                    const countryCode = this.getAttribute('data-code');
+                    deletePassportEntry(countryCode);
+                });
+            });
+        }
+
+        // Delete passport entry
+        function deletePassportEntry(countryCode) {
+            if (!currentUser || !confirm('¿Estás seguro de que quieres eliminar esta entrada?')) return;
+            
+            currentUser.visitedCountries = currentUser.visitedCountries.filter(v => v.code !== countryCode);
+            localStorage.setItem('travelPassportUser', JSON.stringify(currentUser));
+            
+            loadPassportEntries();
+            updateProgress();
+            loadAchievements();
+        }
+
+        // Load achievements
+        function loadAchievements() {
+            const achievementsGrid = document.getElementById('achievementsGrid');
+            achievementsGrid.innerHTML = '';
+            
+            if (!currentUser) return;
+            
+            // Show first 6 achievements (3 locked, 3 unlocked)
+            const achievementsToShow = database.achievements.slice(0, 6);
+            
+            achievementsToShow.forEach(achievement => {
+                const isUnlocked = currentUser.achievements.includes(achievement.id);
+                const progress = calculateAchievementProgress(achievement);
+                
+                const achievementElement = document.createElement('div');
+                achievementElement.className = `text-center p-2 ${!isUnlocked ? 'achievement-locked' : ''}`;
+                achievementElement.innerHTML = `
+                    <div class="bg-${achievement.color}-100 dark:bg-${achievement.color}-900 text-${achievement.color}-800 dark:text-${achievement.color}-200 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <i class="fas ${achievement.icon} text-xl"></i>
+                    </div>
+                    <p class="text-xs font-medium">${achievement.name}</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">${progress.current}/${progress.target}</p>
+                `;
+                
+                achievementsGrid.appendChild(achievementElement);
+            });
+        }
+
+        // Calculate achievement progress
+        function calculateAchievementProgress(achievement) {
+            if (!currentUser) return { current: 0, target: achievement.target };
+            
+            // This is a simplified version - in a real app, we would have more complex logic
+            // based on the achievement type (continent, total countries, etc.)
+            return {
+                current: Math.min(Math.floor(currentUser.visitedCountries.length / 5) * 5, achievement.target),
+                target: achievement.target
+            };
+        }
+
+        // Show all achievements
+        function showAllAchievements() {
+            const allAchievements = document.getElementById('allAchievements');
+            allAchievements.innerHTML = '';
+            
+            if (!currentUser) return;
+            
+            database.achievements.forEach(achievement => {
+                const isUnlocked = currentUser.achievements.includes(achievement.id);
+                const progress = calculateAchievementProgress(achievement);
+                
+                const achievementElement = document.createElement('div');
+                achievementElement.className = `p-3 rounded-lg border ${isUnlocked ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' : 'border-gray-200 dark:border-gray-700'}`;
+                achievementElement.innerHTML = `
+                    <div class="flex items-start">
+                        <div class="bg-${achievement.color}-100 dark:bg-${achievement.color}-900 text-${achievement.color}-800 dark:text-${achievement.color}-200 w-10 h-10 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                            <i class="fas ${achievement.icon}"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-medium">${achievement.name}</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">${achievement.description}</p>
+                            <div class="mt-2 flex items-center">
+                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                    <div class="bg-${achievement.color}-500 h-2 rounded-full" style="width: ${(progress.current / progress.target * 100)}%"></div>
+                                </div>
+                                <span class="text-xs ml-2">${progress.current}/${progress.target}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                allAchievements.appendChild(achievementElement);
+            });
+            
+            showModal('achievementsModal');
+        }
+
+        // Load friends
+        function loadFriends() {
+            const friendsList = document.getElementById('friendsList');
+            friendsList.innerHTML = '';
+            
+            if (!currentUser) return;
+            
+            // Sample friends data (in a real app, this would come from the database)
+            const sampleFriends = [
+                { id: 'user_12345678', name: 'Ana', username: 'ana_traveler', countries: 45 },
+                { id: 'user_23456789', name: 'Carlos', username: 'carlos_explorer', countries: 32 },
+                { id: 'user_34567890', name: 'Luisa', username: 'luisa_adventures', countries: 28 },
+                { id: 'user_45678901', name: 'Pedro', username: 'pedro_globetrotter', countries: 19 }
+            ];
+            
+            sampleFriends.forEach(friend => {
+                const friendElement = document.createElement('div');
+                friendElement.className = 'text-center';
+                friendElement.innerHTML = `
+                    <div class="relative inline-block">
+                        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(friend.name)}&background=3b82f6&color=fff" 
+                             alt="${friend.name}" class="w-16 h-16 rounded-full mx-auto mb-2">
+                        <span class="absolute bottom-0 right-0 bg-emerald-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center">${friend.countries}</span>
+                    </div>
+                    <p class="font-medium">${friend.name}</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">@${friend.username}</p>
+                `;
+                
+                friendsList.appendChild(friendElement);
+            });
+        }
+
+        // Load country select options
+        function loadCountrySelectOptions() {
+            const countrySelect = document.getElementById('countrySelect');
+            
+            // Clear existing options except the first one
+            while (countrySelect.options.length > 1) {
+                countrySelect.remove(1);
+            }
+            
+            // Add all countries
+            database.countries.forEach(country => {
+                // Skip if already visited
+                if (currentUser && currentUser.visitedCountries.some(v => v.code === country.code)) {
+                    return;
+                }
+                
+                const option = document.createElement('option');
+                option.value = country.code;
+                option.textContent = country.name;
+                countrySelect.appendChild(option);
+            });
+        }
+
+        // Save profile
+        function saveProfile() {
+            if (!currentUser) return;
+            
+            currentUser.name = document.getElementById('profileName').value;
+            currentUser.username = document.getElementById('profileUsername').value;
+            currentUser.email = document.getElementById('profileEmail').value;
+            currentUser.bio = document.getElementById('profileBio').value;
+            
+            // Update avatar if changed
+            // In a real app, this would upload the image to a server
+            // For now, we'll just regenerate the UI avatar
+            currentUser.avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.name)}&background=10b981&color=fff`;
+            
+            localStorage.setItem('travelPassportUser', JSON.stringify(currentUser));
+            updateUserUI();
+            hideModal('profileModal');
+            
+            alert('Perfil actualizado correctamente');
+        }
+
+        // Save settings
+        function saveSettings() {
+            if (!currentUser) return;
+            
+            currentUser.settings.language = document.getElementById('languageSelect').value;
+            currentUser.settings.notifications.newCountries = document.getElementById('notifNewCountries').checked;
+            currentUser.settings.notifications.friendUpdates = document.getElementById('notifFriendUpdates').checked;
+            currentUser.settings.notifications.newsletter = document.getElementById('notifNewsletter').checked;
+            
+            // Change password if fields are filled
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+            
+            if (currentPassword || newPassword || confirmNewPassword) {
+                if (currentPassword !== currentUser.password) {
+                    alert('La contraseña actual no es correcta');
+                    return;
+                }
+                
+                if (newPassword !== confirmNewPassword) {
+                    alert('Las nuevas contraseñas no coinciden');
+                    return;
+                }
+                
+                if (newPassword.length < 6) {
+                    alert('La nueva contraseña debe tener al menos 6 caracteres');
+                    return;
+                }
+                
+                currentUser.password = newPassword;
+                alert('Contraseña cambiada correctamente');
+                
+                // Clear password fields
+                document.getElementById('currentPassword').value = '';
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmNewPassword').value = '';
+            }
+            
+            localStorage.setItem('travelPassportUser', JSON.stringify(currentUser));
+            hideModal('settingsModal');
+            
+            alert('Configuración guardada correctamente');
+        }
+
+        // Add country to passport
+        function addCountryToPassport() {
+            const countryCode = document.getElementById('countrySelect').value;
+            const visitDate = document.getElementById('visitDate').value;
+            const notes = document.getElementById('countryNotes').value;
+            
+            if (!countryCode) {
+                alert('Por favor selecciona un país');
+                return;
+            }
+            
+            if (!visitDate) {
+                alert('Por favor ingresa la fecha de visita');
+                return;
+            }
+            
+            const country = database.countries.find(c => c.code === countryCode);
+            if (!country) return;
+            
+            // Add to user's visited countries
+            currentUser.visitedCountries.push({
+                code: countryCode,
+                name: country.name,
+                date: visitDate,
+                notes: notes
+            });
+            
+            // Check for new achievements
+            checkForNewAchievements();
+            
+            // Save user data
+            localStorage.setItem('travelPassportUser', JSON.stringify(currentUser));
+            
+            // Update UI
+            loadPassportEntries();
+            updateProgress();
+            loadAchievements();
+            
+            // Close modal
+            hideModal('addCountryModal');
+            
+            // Show success message
+            alert(`¡${country.name} añadido a tu pasaporte!`);
+        }
+
+        // Check for new achievements
+        function checkForNewAchievements() {
+            if (!currentUser) return;
+            
+            // In a real app, this would have more complex logic
+            // For now, we'll just unlock achievements based on country count
+            const countryCount = currentUser.visitedCountries.length;
+            
+            if (countryCount >= 5 && !currentUser.achievements.includes(1)) {
+                currentUser.achievements.push(1);
+                showAchievementUnlocked(1);
+            }
+            
+            if (countryCount >= 10 && !currentUser.achievements.includes(2)) {
+                currentUser.achievements.push(2);
+                showAchievementUnlocked(2);
+            }
+            
+            if (countryCount >= 15 && !currentUser.achievements.includes(3)) {
+                currentUser.achievements.push(3);
+                showAchievementUnlocked(3);
+            }
+        }
+
+        // Show achievement unlocked notification
+        function showAchievementUnlocked(achievementId) {
+            const achievement = database.achievements.find(a => a.id === achievementId);
+            if (!achievement) return;
+            
+            // In a real app, this would show a nice notification
+            alert(`¡Logro desbloqueado: ${achievement.name}! ${achievement.description}`);
+        }
+
+        // Show add friend modal
+        function showAddFriendModal() {
+            showModal('addFriendModal');
+        }
+
+        // Modal functions
+        function showModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.remove('modal-hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function hideModal(modalId) {
+            const modal = document.getElementById(modalId);
+            modal.classList.add('modal-hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        function showProfileModal() {
+            updateUserUI();
+            showModal('profileModal');
+        }
+
+        function showSettingsModal() {
+            updateUserUI();
+            showModal('settingsModal');
+        }
+
+        function showAddCountryModal(countryName) {
+            loadCountrySelectOptions();
+            
+            if (countryName) {
+                document.getElementById('countrySelect').value = countryName.toLowerCase();
+            }
+            
+            // Set default date to today
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('visitDate').value = today;
+            
+            showModal('addCountryModal');
+        }
+
+        // Format date
+        function formatDate(dateString) {
+            const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+            return new Date(dateString).toLocaleDateString('es-ES', options);
+        }
+
+        // Update language
+        function updateLanguage(lang) {
+            const translations = {
+                'es': {
+                    mapTitle: 'Mapa de tus viajes',
+                    locateText: 'Localizarme',
+                    friendsTitle: 'Compara con amigos',
+                    addFriendText: 'Agregar amigos',
+                    passportTitle: 'Tu pasaporte',
+                    achievementsTitle: 'Logros',
+                    viewAllText: 'Ver todos',
+                    viewAllFriendsText: 'Ver todos los amigos',
+                    notificationTitle: 'Nuevo país detectado',
+                    addCountryTitle: 'Añadir país visitado',
+                    addFriendTitle: 'Agregar amigo'
+                },
+                'en': {
+                    mapTitle: 'Your travel map',
+                    locateText: 'Locate me',
+                    friendsTitle: 'Compare with friends',
+                    addFriendText: 'Add friends',
+                    passportTitle: 'Your passport',
+                    achievementsTitle: 'Achievements',
+                    viewAllText: 'View all',
+                    viewAllFriendsText: 'View all friends',
+                    notificationTitle: 'New country detected',
+                    addCountryTitle: 'Add visited country',
+                    addFriendTitle: 'Add friend'
+                }
+            };
+
+            Object.keys(translations[lang]).forEach(key => {
+                const element = document.getElementById(key);
+                if (element) {
+                    element.textContent = translations[lang][key];
+                }
+            });
+        }
+    </script>
+</body>
+</html>
